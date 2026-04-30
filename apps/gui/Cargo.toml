@@ -1,0 +1,23 @@
+[package]
+name = "horae-app-gui"
+version.workspace = true
+edition.workspace = true
+description = "Horae GUI"
+authors = ["victor_tiss@outlook.com"]
+
+[lib]
+name = "horae_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+horae-domain = { path = "../../crates/domain" }
+horae-application = { path = "../../crates/application" }
+horae-persistence-memory = { path = "../../crates/adapters/persistence_memory" }
+

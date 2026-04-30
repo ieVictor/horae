@@ -1,0 +1,19 @@
+{
+  "name": "horae-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "frontend"
+  ],
+  "scripts": {
+    "gui": "bun tauri dev",
+    "gui:build": "bun tauri build",
+    "tui": "cargo run -p horae-tui",
+    "check": "cargo check && bun --cwd frontend run build",
+    "install:all": "bun install && cd frontend && bun install"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.1.0"
+  }
+}

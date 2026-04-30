@@ -1,0 +1,11 @@
+[package]
+name = "horae-tui"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+horae-application = { path = "../../crates/application" }
+horae-domain = { path = "../../crates/domain" }
+ratatui = "0.26"
+crossterm = "0.27"
+tokio = { version = "1", features = ["full"] }
