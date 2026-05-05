@@ -23,3 +23,28 @@ pub fn fmt_datetime(unix_secs: i64) -> String {
 
     format!("{year}-{month:02}-{day:02} {h:02}:{m:02}")
 }
+
+// A simple deterministic pseudo-random color generator based on a string seed (e.g. day string)
+pub fn random_color(seed: &str) -> ratatui::style::Color {
+    let mut hash: u32 = 5381;
+    for c in seed.chars() {
+        hash = ((hash << 5).wrapping_add(hash)).wrapping_add(c as u32);
+    }
+    
+    let colors = [
+        ratatui::style::Color::Red,
+        ratatui::style::Color::Green,
+        ratatui::style::Color::Yellow,
+        ratatui::style::Color::Blue,
+        ratatui::style::Color::Magenta,
+        ratatui::style::Color::Cyan,
+        ratatui::style::Color::LightRed,
+        ratatui::style::Color::LightGreen,
+        ratatui::style::Color::LightYellow,
+        ratatui::style::Color::LightBlue,
+        ratatui::style::Color::LightMagenta,
+        ratatui::style::Color::LightCyan,
+    ];
+    
+    colors[(hash as usize) % colors.len()]
+}
