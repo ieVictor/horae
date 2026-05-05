@@ -1,7 +1,18 @@
-[workspace.package]
+[package]
+name = "horae"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.88"
+license = "MIT"
 authors = ["victor_tiss@outlook.com"]
 
-[workspace]
-members = ["crates/adapters/*", "crates/application", "crates/domain", "apps/*"]
+[dependencies]
+ratatui = "0.30.0"
+color-eyre = "0.6"
+crossterm = "0.29"
+serde = { version = "1", features = ["derive"] }
+uuid = { version = "1", features = ["v4"] }
+rusqlite = { version = "0.39.0", features = ["bundled"] }
+
+[lints.rust]
+unsafe_code = "forbid"
