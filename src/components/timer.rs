@@ -19,7 +19,11 @@ pub struct TimerComponent {
 
 impl TimerComponent {
     pub fn new(today_secs: i64) -> Self {
-        Self { today_secs, session_start: None, current_subject: None }
+        Self {
+            today_secs,
+            session_start: None,
+            current_subject: None,
+        }
     }
 
     pub fn start(&mut self) {
@@ -90,10 +94,14 @@ impl Component for TimerComponent {
         match key.code {
             KeyCode::Char('q') => Some(Action::Quit),
             KeyCode::Char(' ') => {
-                if self.is_studying() { Some(Action::StopStudy) } else { Some(Action::RequestStart) }
+                if self.is_studying() {
+                    Some(Action::StopStudy)
+                } else {
+                    Some(Action::RequestStart)
+                }
             }
             KeyCode::Char('a') if !self.is_studying() => Some(Action::OpenAnalytics),
-            KeyCode::Char('t') if !self.is_studying() => Some(Action::OpenTasks),
+            KeyCode::Char('t') => Some(Action::OpenTasks),
             KeyCode::Char('s') if !self.is_studying() => Some(Action::OpenSubjects),
             _ => None,
         }
@@ -134,7 +142,10 @@ impl Component for TimerComponent {
                 .as_deref()
                 .map(|s| format!("  [{s}]"))
                 .unwrap_or_default();
-            format!("session {}{subject_part}  ·  SPACE to stop", Self::fmt(session_secs))
+            format!(
+                "session {}{subject_part}  ·  t tasks  ·  SPACE to stop",
+                Self::fmt(session_secs)
+            )
         } else {
             "SPACE to start  ·  a analytics  ·  t tasks  ·  s subjects".to_string()
         };
