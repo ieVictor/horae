@@ -3,7 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use rusqlite::Connection;
 use uuid::Uuid;
 
-use crate::domain::{StudyBlock, StudyBlockId, SubjectId};
+use crate::domain::{DailyStudyTime, StudyBlock, StudyBlockId, StudyBlockWithSubject, SubjectId};
 
 fn now_secs() -> i64 {
     SystemTime::now()
@@ -14,6 +14,57 @@ fn now_secs() -> i64 {
 
 // All queries select columns in the order expected by StudyBlock::try_from:
 // id, subject_id, start_time, end_time, duration, created_at
+
+pub fn find_all_with_subject(conn: &Connection) -> Result<Vec<StudyBlockWithSubject>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT b.id, b.subject_id, b.start_time, b.end_time, b.duration, b.created_at, s.name
+         FROM study_blocks b
+         LEFT JOIN subjects s ON b.subject_id = s.id
+         ORDER BY b.start_time DESC",
+    )?;
+
+    let blocks = stmt
+        .query_map([], |row| {
+            let block = StudyBlock::try_from(row)?;
+            let subject_name: Option<String> = row.get(6)?;
+            Ok(StudyBlockWithSubject {
+                block,
+                subject_name,
+            })
+        })?
+        .collect::<Result<Vec<StudyBlockWithSubject>, _>>()?;
+
+    Ok(blocks)
+}
+
+pub fn weekly_stats(conn: &Connection) -> Result<Vec<DailyStudyTime>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "WITH RECURSIVE
+          days(day, i) AS (
+            SELECT date('now', 'localtime', '-6 days', 'weekday 0'), 0
+            UNION ALL
+            SELECT date(day, '+1 day'), i + 1 FROM days WHERE i < 6
+          )
+         SELECT
+          d.day,
+          COALESCE(SUM(b.duration), 0)
+         FROM days d
+         LEFT JOIN study_blocks b ON date(b.start_time, 'unixepoch', 'localtime') = d.day
+         GROUP BY d.day
+         ORDER BY d.day ASC"
+    )?;
+
+    let stats = stmt
+        .query_map([], |row| {
+            Ok(DailyStudyTime {
+                day: row.get(0)?,
+                duration_secs: row.get(1)?,
+            })
+        })?
+        .collect::<Result<Vec<DailyStudyTime>, _>>()?;
+
+    Ok(stats)
+}
 
 pub fn find_all(conn: &Connection) -> Result<Vec<StudyBlock>, rusqlite::Error> {
     let mut stmt = conn.prepare(

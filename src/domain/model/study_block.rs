@@ -41,3 +41,15 @@ impl TryFrom<&Row<'_>> for StudyBlock {
         })
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct StudyBlockWithSubject {
+    pub block: StudyBlock,
+    pub subject_name: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct DailyStudyTime {
+    pub day: String,
+    pub duration_secs: i64,
+}

@@ -203,9 +203,10 @@ impl App {
                     }
 
                     Some(Action::OpenAnalytics) => {
-                        let blocks = db::study_block::find_all(&self.conn)?;
+                        let blocks = db::study_block::find_all_with_subject(&self.conn)?;
+                        let stats = db::study_block::weekly_stats(&self.conn)?;
                         self.overlay =
-                            Some(Overlay::Analytics(AnalyticsComponent::new(blocks)));
+                            Some(Overlay::Analytics(AnalyticsComponent::new(blocks, stats)));
                     }
                     Some(Action::CloseAnalytics) => self.overlay = None,
 
