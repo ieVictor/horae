@@ -1,9 +1,0 @@
-[package]
-name = "horae-persistence-memory"
-version.workspace = true
-edition.workspace = true
-
-[dependencies]
-horae-application = { path = "../../application" }
-horae-domain = { path = "../../domain" }
-async-trait = "0.1"
