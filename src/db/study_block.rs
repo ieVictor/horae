@@ -84,7 +84,7 @@ pub fn find_today(conn: &Connection) -> Result<Vec<StudyBlock>, rusqlite::Error>
     let mut stmt = conn.prepare(
         "SELECT id, subject_id, start_time, end_time, duration, created_at
          FROM study_blocks
-         WHERE date(start_time, 'unixepoch') = date('now')",
+         WHERE date(start_time, 'unixepoch', 'localtime') = date('now', 'localtime')",
     )?;
 
     let blocks = stmt
@@ -98,7 +98,7 @@ pub fn today_total_secs(conn: &Connection) -> Result<i64, rusqlite::Error> {
     let total: i64 = conn.query_row(
         "SELECT COALESCE(SUM(duration), 0)
          FROM study_blocks
-         WHERE date(start_time, 'unixepoch') = date('now')",
+         WHERE date(start_time, 'unixepoch', 'localtime') = date('now', 'localtime')",
         [],
         |row| row.get(0),
     )?;
