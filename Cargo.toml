@@ -13,6 +13,8 @@ crossterm = "0.29"
 serde = { version = "1", features = ["derive"] }
 uuid = { version = "1", features = ["v4"] }
 rusqlite = { version = "0.39.0", features = ["bundled"] }
+tui-input = "*"
+chrono = "0.4"
 
 [lints.rust]
 unsafe_code = "forbid"
