@@ -1,13 +1,9 @@
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use rusqlite::{Connection, params};
 use uuid::Uuid;
 
 use crate::domain::Question;
 
-fn now_secs() -> i64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64
-}
+use super::now_secs;
 
 const COLS: &str =
     "id, subject_id, text, answer, status, \

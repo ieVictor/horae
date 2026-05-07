@@ -1,16 +1,9 @@
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use rusqlite::Connection;
 use uuid::Uuid;
 
 use crate::domain::{Priority, Task};
 
-fn now_secs() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs() as i64
-}
+use super::now_secs;
 
 fn priority_str(p: Priority) -> &'static str {
     match p {

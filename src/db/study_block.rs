@@ -1,16 +1,9 @@
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use rusqlite::Connection;
 use uuid::Uuid;
 
 use crate::domain::{DailyStudyTime, StudyBlock, StudyBlockId, StudyBlockWithSubject, SubjectId};
 
-fn now_secs() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs() as i64
-}
+use super::now_secs;
 
 // All queries select columns in the order expected by StudyBlock::try_from:
 // id, subject_id, start_time, end_time, duration, created_at

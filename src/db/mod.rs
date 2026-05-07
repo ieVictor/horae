@@ -2,6 +2,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use rusqlite::Connection;
 
+pub(super) fn now_secs() -> i64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64
+}
+
 pub fn init(conn: &Connection) -> Result<(), rusqlite::Error> {
     // subjects must be created before study_blocks (FK reference)
     conn.execute_batch(
