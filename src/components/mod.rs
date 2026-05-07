@@ -4,11 +4,14 @@ use ratatui::{Frame, layout::Rect};
 use crate::domain::Priority;
 
 pub mod analytics;
+pub mod input;
+pub mod questions;
 pub mod subjects;
 pub mod tasks;
 pub mod timer;
 
 pub use analytics::AnalyticsComponent;
+pub use questions::QuestionsComponent;
 pub use subjects::SubjectsComponent;
 pub use tasks::TasksComponent;
 pub use timer::TimerComponent;
@@ -32,6 +35,15 @@ pub enum Action {
     // Subject mutations
     CreateSubject(String),
     DeleteSubject(String),
+    // Q&A session-end flow
+    ToggleQuestionResolved { id: String, block_id: String, resolved: bool },
+    AnswerQuestion { id: String, answer: String, block_id: String },
+    SaveCapturedQuestions { questions: Vec<String>, subject_id: String, block_id: String },
+    QADone,
+    // Subjects questions view
+    OpenSubjectQuestions(String),
+    ToggleSubjectQuestionResolved { id: String, resolved: bool },
+    AnswerSubjectQuestion { id: String, answer: String },
     // Global
     Quit,
 }

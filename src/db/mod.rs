@@ -31,6 +31,20 @@ pub fn init(conn: &Connection) -> Result<(), rusqlite::Error> {
             duration INTEGER NOT NULL DEFAULT 0,
             created_at INTEGER NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS questions (
+            id TEXT PRIMARY KEY,
+            subject_id TEXT NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+            text TEXT NOT NULL,
+            answer TEXT,
+            status TEXT NOT NULL CHECK(status IN ('Open', 'Resolved')),
+            created_in_block_id TEXT REFERENCES study_blocks(id) ON DELETE SET NULL,
+            resolved_in_block_id TEXT REFERENCES study_blocks(id) ON DELETE SET NULL,
+            created_at INTEGER NOT NULL,
+            resolved_at INTEGER,
+            updated_at INTEGER
+        );
+        CREATE INDEX IF NOT EXISTS idx_questions_subject_status
+            ON questions(subject_id, status);
         ",
     )?;
 
@@ -50,6 +64,7 @@ pub fn init(conn: &Connection) -> Result<(), rusqlite::Error> {
     Ok(())
 }
 
+pub mod question;
 pub mod study_block;
 pub mod subject;
 pub mod task;

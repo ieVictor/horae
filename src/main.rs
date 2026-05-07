@@ -12,8 +12,11 @@ use ratatui::{
 };
 use rusqlite::Connection;
 
-use components::{Action, AnalyticsComponent, Component, SubjectsComponent, TasksComponent, TimerComponent};
-use domain::SubjectStats;
+use components::{
+    Action, AnalyticsComponent, Component, QuestionsComponent, SubjectsComponent, TasksComponent,
+    TimerComponent,
+};
+use domain::{Question, SubjectStats};
 
 mod components;
 mod db;
@@ -34,11 +37,12 @@ fn main() -> Result<()> {
 struct StartSelectorState {
     subjects: Vec<SubjectStats>,
     cursor: usize,
+    open_questions: Vec<Question>,
 }
 
 impl StartSelectorState {
-    fn new(subjects: Vec<SubjectStats>) -> Self {
-        Self { subjects, cursor: 0 }
+    fn new(subjects: Vec<SubjectStats>, open_questions: Vec<Question>) -> Self {
+        Self { subjects, cursor: 0, open_questions }
     }
 
     fn select_next(&mut self) {
@@ -85,12 +89,25 @@ impl StartSelectorState {
     }
 }
 
+fn render_passive_questions(frame: &mut Frame, area: Rect, questions: &[Question]) {
+    let mut lines: Vec<Line> = vec![Line::from("  - Open questions -").dim()];
+    for q in questions.iter().take(5) {
+        lines.push(Line::from(format!("  {}", q.text)).dim());
+    }
+    let extra = questions.len().saturating_sub(5);
+    if extra > 0 {
+        lines.push(Line::from(format!("  ... +{extra} more")).dim());
+    }
+    frame.render_widget(Paragraph::new(lines), area);
+}
+
 // ── Overlay screens ──────────────────────────────────────────────────────────
 
 enum Overlay {
     Analytics(AnalyticsComponent),
     Tasks(TasksComponent),
     Subjects(SubjectsComponent),
+    Questions(QuestionsComponent),
     StartSelector(StartSelectorState),
 }
 
@@ -101,6 +118,7 @@ struct App {
     timer: TimerComponent,
     overlay: Option<Overlay>,
     active_block_id: Option<String>,
+    active_subject_id: Option<String>,
 }
 
 impl App {
@@ -111,6 +129,7 @@ impl App {
             timer: TimerComponent::new(today_secs),
             overlay: None,
             active_block_id: None,
+            active_subject_id: None,
         })
     }
 
@@ -122,13 +141,30 @@ impl App {
                     Some(Overlay::Analytics(c)) => c.render(frame, area),
                     Some(Overlay::Tasks(c)) => c.render(frame, area),
                     Some(Overlay::Subjects(c)) => c.render(frame, area),
+                    Some(Overlay::Questions(c)) => c.render(frame, area),
                     Some(Overlay::StartSelector(s)) => {
                         let [timer_area, selector_area] = Layout::horizontal([
                             Constraint::Percentage(60),
                             Constraint::Percentage(40),
                         ])
                         .areas(area);
-                        self.timer.render(frame, timer_area);
+
+                        if s.open_questions.is_empty() {
+                            self.timer.render(frame, timer_area);
+                        } else {
+                            let count = s.open_questions.len();
+                            let extra = count.saturating_sub(5);
+                            let q_height =
+                                1 + count.min(5) as u16 + if extra > 0 { 1 } else { 0 };
+                            let [timer_part, questions_part] = Layout::vertical([
+                                Constraint::Min(0),
+                                Constraint::Length(q_height),
+                            ])
+                            .areas(timer_area);
+                            self.timer.render(frame, timer_part);
+                            render_passive_questions(frame, questions_part, &s.open_questions);
+                        }
+
                         s.render(frame, selector_area);
                     }
                     None => self.timer.render(frame, area),
@@ -151,11 +187,13 @@ impl App {
                             if let Some(Overlay::StartSelector(s)) = &mut self.overlay {
                                 s.select_next();
                             }
+                            self.update_selector_questions()?;
                         }
                         KeyCode::Char('k') | KeyCode::Up => {
                             if let Some(Overlay::StartSelector(s)) = &mut self.overlay {
                                 s.select_previous();
                             }
+                            self.update_selector_questions()?;
                         }
                         KeyCode::Enter => {
                             if let Some(Overlay::StartSelector(s)) = self.overlay.take() {
@@ -165,6 +203,7 @@ impl App {
                                     let block =
                                         db::study_block::create(&self.conn, &subject_id)?;
                                     self.active_block_id = Some(block.id.0);
+                                    self.active_subject_id = Some(subject_id);
                                     self.timer.set_subject(subject_name);
                                     self.timer.start();
                                 }
@@ -183,6 +222,7 @@ impl App {
                     Some(Overlay::Analytics(c)) => c.handle_key(key),
                     Some(Overlay::Tasks(c)) => c.handle_key(key),
                     Some(Overlay::Subjects(c)) => c.handle_key(key),
+                    Some(Overlay::Questions(c)) => c.handle_key(key),
                     None => self.timer.handle_key(key),
                     Some(Overlay::StartSelector(_)) => unreachable!(),
                 };
@@ -192,14 +232,33 @@ impl App {
 
                     Some(Action::RequestStart) => {
                         let subjects = db::subject::find_all_summary(&self.conn)?;
-                        self.overlay =
-                            Some(Overlay::StartSelector(StartSelectorState::new(subjects)));
+                        let initial_questions = if let Some(first) = subjects.first() {
+                            db::question::find_open_for_subject(&self.conn, &first.id.0)?
+                        } else {
+                            vec![]
+                        };
+                        self.overlay = Some(Overlay::StartSelector(StartSelectorState::new(
+                            subjects,
+                            initial_questions,
+                        )));
                     }
                     Some(Action::StopStudy) => {
+                        let block_id = self.active_block_id.clone().unwrap_or_default();
                         if let Some(id) = self.active_block_id.take() {
                             db::study_block::end(&self.conn, &id)?;
                         }
+                        let subject_id = self.active_subject_id.take().unwrap_or_default();
                         self.timer.stop();
+                        let open_questions = if !subject_id.is_empty() {
+                            db::question::find_open_for_subject(&self.conn, &subject_id)?
+                        } else {
+                            vec![]
+                        };
+                        self.overlay = Some(Overlay::Questions(QuestionsComponent::new(
+                            subject_id,
+                            block_id,
+                            open_questions,
+                        )));
                     }
 
                     Some(Action::OpenAnalytics) => {
@@ -252,8 +311,67 @@ impl App {
                         self.refresh_subjects()?;
                     }
 
+                    // Q&A session-end flow
+                    Some(Action::ToggleQuestionResolved { id, block_id, resolved }) => {
+                        if resolved {
+                            db::question::resolve(&self.conn, &id, None, Some(&block_id))?;
+                        } else {
+                            db::question::reopen(&self.conn, &id)?;
+                        }
+                    }
+                    Some(Action::AnswerQuestion { id, answer, block_id }) => {
+                        db::question::resolve(&self.conn, &id, Some(&answer), Some(&block_id))?;
+                    }
+                    Some(Action::SaveCapturedQuestions { questions, subject_id, block_id }) => {
+                        for text in &questions {
+                            db::question::create(
+                                &self.conn,
+                                text,
+                                &subject_id,
+                                Some(&block_id),
+                            )?;
+                        }
+                        self.overlay = None;
+                    }
+                    Some(Action::QADone) => self.overlay = None,
+
+                    // Subjects questions view
+                    Some(Action::OpenSubjectQuestions(id)) => {
+                        let questions = db::question::find_all_for_subject(&self.conn, &id)?;
+                        if let Some(Overlay::Subjects(c)) = &mut self.overlay {
+                            c.set_questions(questions, id);
+                        }
+                    }
+                    Some(Action::ToggleSubjectQuestionResolved { id, resolved }) => {
+                        if resolved {
+                            db::question::resolve(&self.conn, &id, None, None)?;
+                        } else {
+                            db::question::reopen(&self.conn, &id)?;
+                        }
+                        self.refresh_subject_questions()?;
+                    }
+                    Some(Action::AnswerSubjectQuestion { id, answer }) => {
+                        db::question::resolve(&self.conn, &id, Some(&answer), None)?;
+                        self.refresh_subject_questions()?;
+                    }
+
                     None => {}
                 }
+            }
+        }
+        Ok(())
+    }
+
+    fn update_selector_questions(&mut self) -> Result<()> {
+        let subject_id = if let Some(Overlay::StartSelector(s)) = &self.overlay {
+            s.selected().map(|s| s.id.0.clone())
+        } else {
+            None
+        };
+        if let Some(id) = subject_id {
+            let questions = db::question::find_open_for_subject(&self.conn, &id)?;
+            if let Some(Overlay::StartSelector(s)) = &mut self.overlay {
+                s.open_questions = questions;
             }
         }
         Ok(())
@@ -271,6 +389,16 @@ impl App {
         if let Some(Overlay::Subjects(c)) = &mut self.overlay {
             let subjects = db::subject::find_all_summary(&self.conn)?;
             c.update_subjects(subjects);
+        }
+        Ok(())
+    }
+
+    fn refresh_subject_questions(&mut self) -> Result<()> {
+        if let Some(Overlay::Subjects(c)) = &mut self.overlay {
+            if let Some(id) = c.questions_subject_id().map(str::to_owned) {
+                let questions = db::question::find_all_for_subject(&self.conn, &id)?;
+                c.update_questions(questions);
+            }
         }
         Ok(())
     }

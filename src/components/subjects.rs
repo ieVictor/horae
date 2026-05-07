@@ -6,16 +6,18 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, List, ListItem, ListState, Paragraph},
 };
+use tui_input::Input;
 
-use crate::domain::{StudyBlock, SubjectStats};
+use crate::domain::{Question, QuestionStatus, StudyBlock, SubjectStats};
 use crate::util;
 
-use super::{Action, Component};
+use super::{Action, Component, input::apply_input};
 
 enum Mode {
     Browsing,
     Expanded { sessions: Vec<StudyBlock> },
     Creating(String),
+    Questions { questions: Vec<Question>, cursor: usize, answer: Option<Input>, subject_id: String },
 }
 
 pub struct SubjectsComponent {
@@ -46,6 +48,26 @@ impl SubjectsComponent {
     pub fn set_expanded_sessions(&mut self, sessions: Vec<StudyBlock>) {
         if let Mode::Expanded { sessions: s } = &mut self.mode {
             *s = sessions;
+        }
+    }
+
+    pub fn set_questions(&mut self, questions: Vec<Question>, subject_id: String) {
+        self.mode = Mode::Questions { questions, cursor: 0, answer: None, subject_id };
+    }
+
+    pub fn update_questions(&mut self, questions: Vec<Question>) {
+        if let Mode::Questions { questions: q, cursor, .. } = &mut self.mode {
+            let prev = *cursor;
+            *q = questions;
+            *cursor = prev.min(q.len().saturating_sub(1));
+        }
+    }
+
+    pub fn questions_subject_id(&self) -> Option<&str> {
+        if let Mode::Questions { subject_id, .. } = &self.mode {
+            Some(subject_id)
+        } else {
+            None
         }
     }
 
@@ -97,6 +119,13 @@ impl Component for SubjectsComponent {
                         Mode::Browsing
                     }
                 }
+                KeyCode::Char('?') => {
+                    if let Some(subj) = self.selected() {
+                        let id = subj.id.0.clone();
+                        action = Some(Action::OpenSubjectQuestions(id));
+                    }
+                    Mode::Browsing
+                }
                 KeyCode::Char('d') => {
                     if let Some(subj) = self.selected() {
                         if !subj.is_default {
@@ -141,6 +170,69 @@ impl Component for SubjectsComponent {
                 KeyCode::Esc => Mode::Browsing,
                 _ => Mode::Creating(input),
             },
+
+            Mode::Questions { mut questions, mut cursor, mut answer, subject_id } => {
+                let mut go_back = false;
+
+                if let Some(mut input) = answer.take() {
+                    match key.code {
+                        KeyCode::Enter => {
+                            let text = input.value().trim().to_string();
+                            if !text.is_empty() {
+                                if let Some(q) = questions.get_mut(cursor) {
+                                    q.status = QuestionStatus::Resolved;
+                                    q.answer = Some(text.clone());
+                                    action = Some(Action::AnswerSubjectQuestion {
+                                        id: q.id.0.clone(),
+                                        answer: text,
+                                    });
+                                }
+                            }
+                        }
+                        KeyCode::Esc => {}
+                        code => {
+                            apply_input(&mut input, code);
+                            answer = Some(input);
+                        }
+                    }
+                } else {
+                    match key.code {
+                        KeyCode::Char('j') | KeyCode::Down => {
+                            cursor = (cursor + 1).min(questions.len().saturating_sub(1));
+                        }
+                        KeyCode::Char('k') | KeyCode::Up => {
+                            cursor = cursor.saturating_sub(1);
+                        }
+                        KeyCode::Char(' ') => {
+                            if let Some(q) = questions.get_mut(cursor) {
+                                let resolving = q.status == QuestionStatus::Open;
+                                q.status = if resolving {
+                                    QuestionStatus::Resolved
+                                } else {
+                                    QuestionStatus::Open
+                                };
+                                action = Some(Action::ToggleSubjectQuestionResolved {
+                                    id: q.id.0.clone(),
+                                    resolved: resolving,
+                                });
+                            }
+                        }
+                        KeyCode::Char('a') => {
+                            answer = Some(Input::default());
+                        }
+                        KeyCode::Esc => {
+                            go_back = true;
+                        }
+                        _ => {}
+                    }
+                }
+
+                if go_back {
+                    Mode::Browsing
+                } else {
+                    Mode::Questions { questions, cursor, answer, subject_id }
+                }
+            }
         };
 
         action
@@ -150,6 +242,12 @@ impl Component for SubjectsComponent {
         let block = Block::bordered().title(" Subjects ");
         let inner = block.inner(area);
         frame.render_widget(block, area);
+
+        // Questions view
+        if let Mode::Questions { questions, cursor, answer, .. } = &self.mode {
+            render_questions_list(questions, *cursor, answer, frame, inner);
+            return;
+        }
 
         // Expanded: full-screen detail view for the selected subject.
         if let Mode::Expanded { sessions } = &self.mode {
@@ -233,11 +331,64 @@ impl Component for SubjectsComponent {
             );
         } else {
             frame.render_widget(
-                Paragraph::new("n new  ·  d delete  ·  l expand  ·  ESC back")
+                Paragraph::new("n new  ·  d delete  ·  l expand  ·  ? questions  ·  ESC back")
                     .dim()
                     .right_aligned(),
                 hint_area,
             );
         }
     }
+}
+
+fn render_questions_list(
+    questions: &[Question],
+    cursor: usize,
+    answer: &Option<Input>,
+    frame: &mut Frame,
+    area: Rect,
+) {
+    let [list_area, hint_area] =
+        Layout::vertical([Constraint::Min(0), Constraint::Length(1)]).areas(area);
+
+    let answering = answer.is_some();
+    let mut items: Vec<ListItem> = Vec::new();
+
+    for (i, q) in questions.iter().enumerate() {
+        let is_cursor = i == cursor;
+        let is_resolved = q.status == QuestionStatus::Resolved;
+        let tag = if is_resolved { "[Resolved]" } else { "[Open]    " };
+
+        let line = if is_cursor {
+            Line::from(format!("> {tag} {}", q.text)).style(Style::new().reversed())
+        } else if is_resolved {
+            Line::from(format!("  {tag} {}", q.text)).dim()
+        } else {
+            Line::from(format!("  {tag} {}", q.text))
+        };
+        items.push(ListItem::new(line));
+
+        if is_cursor {
+            if let Some(input) = answer {
+                items.push(ListItem::new(Line::from(format!(
+                    "         answer> {}█",
+                    input.value()
+                ))));
+            } else if let Some(ans) = &q.answer {
+                items.push(ListItem::new(Line::from(format!("         {ans}")).dim()));
+            }
+        }
+    }
+
+    if questions.is_empty() {
+        items.push(ListItem::new(Line::from("  No questions yet.").dim()));
+    }
+
+    frame.render_widget(List::new(items), list_area);
+
+    let hints = if answering {
+        "enter save · esc cancel"
+    } else {
+        "j/k move · space toggle · a answer · esc back"
+    };
+    frame.render_widget(Paragraph::new(hints).dim().right_aligned(), hint_area);
 }

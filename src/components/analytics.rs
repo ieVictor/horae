@@ -1,7 +1,7 @@
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     Frame,
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Layout, Rect},
     style::{Color, Style, Stylize},
     text::Line,
     widgets::{Bar, BarChart, BarGroup, Block, Borders, List, ListItem, ListState, Paragraph},
