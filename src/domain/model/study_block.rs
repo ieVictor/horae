@@ -5,6 +5,7 @@ use rusqlite::{
 use serde::{Deserialize, Serialize};
 
 use super::SubjectId;
+use super::subject::SubjectStats;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct StudyBlockId(pub String);
@@ -29,15 +30,14 @@ pub struct StudyBlock {
 impl TryFrom<&Row<'_>> for StudyBlock {
     type Error = rusqlite::Error;
 
-    // Expects columns in order: id, subject_id, start_time, end_time, duration, created_at
     fn try_from(row: &Row) -> Result<Self, Self::Error> {
         Ok(StudyBlock {
-            id: row.get(0)?,
-            subject_id: row.get::<_, Option<String>>(1)?.map(SubjectId),
-            start_time: row.get(2)?,
-            end_time: row.get::<_, Option<i64>>(3)?,
-            duration: row.get(4)?,
-            created_at: row.get(5)?,
+            id: row.get("id")?,
+            subject_id: row.get::<_, Option<String>>("subject_id")?.map(SubjectId),
+            start_time: row.get("start_time")?,
+            end_time: row.get("end_time")?,
+            duration: row.get("duration")?,
+            created_at: row.get("created_at")?,
         })
     }
 }
@@ -45,7 +45,20 @@ impl TryFrom<&Row<'_>> for StudyBlock {
 #[derive(Debug, Clone)]
 pub struct StudyBlockWithSubject {
     pub block: StudyBlock,
-    pub subject_name: Option<String>,
+    pub subject: SubjectStats,
+}
+
+impl TryFrom<&Row<'_>> for StudyBlockWithSubject {
+    type Error = rusqlite::Error;
+
+    fn try_from(row: &Row) -> Result<Self, Self::Error> {
+        let mut subject = SubjectStats::try_from(row)?;
+        subject.id = row.get("subject_id")?;
+        Ok(Self {
+            block: StudyBlock::try_from(row)?,
+            subject,
+        })
+    }
 }
 
 #[derive(Debug, Clone)]

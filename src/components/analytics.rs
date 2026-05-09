@@ -1,10 +1,12 @@
+use std::str::FromStr;
+
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
     style::{Color, Style, Stylize},
     text::Line,
-    widgets::{Bar, BarChart, BarGroup, Block, Borders, List, ListItem, ListState, Paragraph},
+    widgets::{Bar, BarChart, BarGroup, Block, Borders, Cell, Paragraph, Row, Table, TableState},
 };
 
 use crate::domain::{DailyStudyTime, StudyBlockWithSubject};
@@ -15,12 +17,12 @@ use super::{Action, Component};
 pub struct AnalyticsComponent {
     blocks: Vec<StudyBlockWithSubject>,
     stats: Vec<DailyStudyTime>,
-    list_state: ListState,
+    list_state: TableState,
 }
 
 impl AnalyticsComponent {
     pub fn new(blocks: Vec<StudyBlockWithSubject>, stats: Vec<DailyStudyTime>) -> Self {
-        let mut list_state = ListState::default();
+        let mut list_state = TableState::default();
         if !blocks.is_empty() {
             list_state.select(Some(0));
         }
@@ -29,6 +31,103 @@ impl AnalyticsComponent {
             stats,
             list_state,
         }
+    }
+}
+
+impl AnalyticsComponent {
+    fn render_chart(&self, frame: &mut Frame, area: Rect) {
+        let max_duration_secs = self
+            .stats
+            .iter()
+            .map(|s| s.duration_secs)
+            .max()
+            .unwrap_or(0);
+        let max_hours = ((max_duration_secs as f64 / 3600.0).ceil() as u64).max(1);
+
+        let bars: Vec<Bar> = self
+            .stats
+            .iter()
+            .map(|stat| {
+                let label = stat.day.chars().skip(5).collect::<String>();
+                let hours = stat.duration_secs as f64 / 3600.0;
+                let val = (hours * 10.0).round() as u64;
+                let color = util::random_color(&stat.day);
+                Bar::default()
+                    .label(Line::from(label))
+                    .value(val)
+                    .text_value(format!("{:.1}h", hours))
+                    .style(Style::default().fg(color))
+                    .value_style(Style::default().fg(Color::Black).bg(color))
+            })
+            .collect();
+
+        let barchart = BarChart::default()
+            .block(
+                Block::default()
+                    .title(" Weekly Study Time ")
+                    .borders(Borders::ALL),
+            )
+            .bar_width(7)
+            .bar_gap(2)
+            .label_style(Style::default().fg(Color::White))
+            .data(BarGroup::default().bars(&bars))
+            .max(max_hours * 10);
+
+        frame.render_widget(barchart, area);
+    }
+
+    fn render_table(&mut self, frame: &mut Frame, area: Rect) {
+        let header = Row::new(vec![
+            Cell::from("Start Time").style(Style::new().bold()),
+            Cell::from("Duration").style(Style::new().bold()),
+            Cell::from("").style(Style::new().bold()),
+            Cell::from("Subject").style(Style::new().bold()),
+            Cell::from("Status").style(Style::new().bold()),
+        ])
+        .bottom_margin(1);
+
+        let rows: Vec<Row> = self
+            .blocks
+            .iter()
+            .map(|b| {
+                let start = util::fmt_datetime(b.block.start_time);
+                let duration = util::fmt_duration(b.block.duration);
+                let status = if b.block.end_time.is_some() {
+                    "✓ done"
+                } else {
+                    "● ongoing"
+                };
+                let color = Color::from_str(&b.subject.color_hex).unwrap_or(Color::Gray);
+                Row::new(vec![
+                    Cell::from(start),
+                    Cell::from(duration),
+                    Cell::from("██").style(Style::new().fg(color)),
+                    Cell::from(b.subject.name.clone()),
+                    Cell::from(status),
+                ])
+            })
+            .collect();
+
+        let table = Table::new(
+            rows,
+            [
+                Constraint::Length(20),
+                Constraint::Length(10),
+                Constraint::Length(3),
+                Constraint::Min(16),
+                Constraint::Length(10),
+            ],
+        )
+        .header(header)
+        .block(
+            Block::default()
+                .title(" Study Blocks ")
+                .borders(Borders::ALL),
+        )
+        .row_highlight_style(Style::new().reversed())
+        .highlight_symbol("> ");
+
+        frame.render_stateful_widget(table, area, &mut self.list_state);
     }
 }
 
@@ -54,92 +153,15 @@ impl Component for AnalyticsComponent {
         let inner = block.inner(area);
         frame.render_widget(block, area);
 
-        let [chart_area, list_area, hint_area] = Layout::vertical([
+        let [chart_area, table_area, hint_area] = Layout::vertical([
             Constraint::Length(12),
             Constraint::Min(0),
             Constraint::Length(1),
         ])
         .areas(inner);
 
-        // --- Render Chart ---
-        // Max duration in hours for scaling
-        let max_duration_secs = self
-            .stats
-            .iter()
-            .map(|s| s.duration_secs)
-            .max()
-            .unwrap_or(0);
-        let max_hours = (max_duration_secs as f64 / 3600.0).ceil() as u64;
-        let max_hours = max_hours.max(1); // At least 1 for the scale
-
-        let bars: Vec<Bar> = self
-            .stats
-            .iter()
-            .map(|stat| {
-                // Get short day name, e.g., "Mon" from "YYYY-MM-DD"
-                // For simplicity in SQLite, day is "YYYY-MM-DD"
-                // We can parse or just use the last 5 chars "MM-DD"
-                let label = stat.day.chars().skip(5).collect::<String>();
-                let hours = stat.duration_secs as f64 / 3600.0;
-                // ratatui BarChart uses u64, we can multiply by 10 for 1 decimal precision, or just use whole hours.
-                // Let's use minutes for better visualization resolution, but display in hours maybe?
-                // Actually, ratatui BarChart text can be custom.
-                let val = (hours * 10.0).round() as u64; // e.g. 1.5h -> 15
-                let color = util::random_color(&stat.day);
-                Bar::default()
-                    .label(Line::from(label))
-                    .value(val)
-                    .text_value(format!("{:.1}h", hours))
-                    .style(Style::default().fg(color))
-                    .value_style(Style::default().fg(Color::Black).bg(color))
-            })
-            .collect();
-
-        let mut barchart = BarChart::default()
-            .block(
-                Block::default()
-                    .title(" Weekly Study Time ")
-                    .borders(Borders::ALL),
-            )
-            .bar_width(7)
-            .bar_gap(2)
-            .label_style(Style::default().fg(Color::White));
-
-        barchart = barchart.data(BarGroup::default().bars(&bars));
-        // Max value scale (since we scaled by 10)
-        barchart = barchart.max(max_hours * 10);
-
-        frame.render_widget(barchart, chart_area);
-
-        // --- Render List ---
-        let items: Vec<ListItem> = self
-            .blocks
-            .iter()
-            .map(|b| {
-                let start = util::fmt_datetime(b.block.start_time);
-                let duration = util::fmt_duration(b.block.duration);
-                let status = if b.block.end_time.is_some() {
-                    "✓"
-                } else {
-                    "● ongoing"
-                };
-                let subject = b.subject_name.as_deref().unwrap_or("No Subject");
-                ListItem::new(Line::from(format!(
-                    "  {start}   {duration}   [{subject}]   {status}"
-                )))
-            })
-            .collect();
-
-        let list = List::new(items)
-            .block(
-                Block::default()
-                    .title(" Study Blocks ")
-                    .borders(Borders::ALL),
-            )
-            .highlight_style(Style::new().reversed())
-            .highlight_symbol("> ");
-
-        frame.render_stateful_widget(list, list_area, &mut self.list_state);
+        self.render_chart(frame, chart_area);
+        self.render_table(frame, table_area);
 
         frame.render_widget(
             Paragraph::new("j/k to scroll  ·  ESC to go back")

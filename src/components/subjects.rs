@@ -2,7 +2,7 @@ use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
-    style::{Style, Stylize},
+    style::{Color, Style, Stylize},
     text::{Line, Span},
     widgets::{Block, List, ListItem, ListState, Paragraph},
 };
@@ -13,10 +13,34 @@ use crate::util;
 
 use super::{Action, Component, input::apply_input};
 
+const COLORS: &[(&str, Color, &str)] = &[
+    ("Black",        Color::Black,        "#000000"),
+    ("Red",          Color::Red,          "#800000"),
+    ("Green",        Color::Green,        "#008000"),
+    ("Yellow",       Color::Yellow,       "#808000"),
+    ("Blue",         Color::Blue,         "#000080"),
+    ("Magenta",      Color::Magenta,      "#800080"),
+    ("Cyan",         Color::Cyan,         "#008080"),
+    ("Gray",         Color::Gray,         "#c0c0c0"),
+    ("Dark Gray",    Color::DarkGray,     "#808080"),
+    ("Light Red",    Color::LightRed,     "#ff0000"),
+    ("Light Green",  Color::LightGreen,   "#00ff00"),
+    ("Light Yellow", Color::LightYellow,  "#ffff00"),
+    ("Light Blue",   Color::LightBlue,    "#0000ff"),
+    ("Light Magenta",Color::LightMagenta, "#ff00ff"),
+    ("Light Cyan",   Color::LightCyan,    "#00ffff"),
+    ("White",        Color::White,        "#ffffff"),
+];
+
+enum CreatingStep {
+    Name(String),
+    Color { name: String, cursor: usize },
+}
+
 enum Mode {
     Browsing,
     Expanded { sessions: Vec<StudyBlock> },
-    Creating(String),
+    Creating(CreatingStep),
     Questions { questions: Vec<Question>, cursor: usize, answer: Option<Input>, subject_id: String },
 }
 
@@ -134,7 +158,7 @@ impl Component for SubjectsComponent {
                     }
                     Mode::Browsing
                 }
-                KeyCode::Char('n') => Mode::Creating(String::new()),
+                KeyCode::Char('n') => Mode::Creating(CreatingStep::Name(String::new())),
                 KeyCode::Esc => {
                     action = Some(Action::CloseSubjects);
                     Mode::Browsing
@@ -151,24 +175,45 @@ impl Component for SubjectsComponent {
                 _ => Mode::Expanded { sessions },
             },
 
-            Mode::Creating(mut input) => match key.code {
-                KeyCode::Char(c) => {
-                    input.push(c);
-                    Mode::Creating(input)
-                }
-                KeyCode::Backspace => {
-                    input.pop();
-                    Mode::Creating(input)
-                }
-                KeyCode::Enter => {
-                    let name = input.trim().to_string();
-                    if !name.is_empty() {
-                        action = Some(Action::CreateSubject(name));
+            Mode::Creating(step) => match step {
+                CreatingStep::Name(mut input) => match key.code {
+                    KeyCode::Char(c) => {
+                        input.push(c);
+                        Mode::Creating(CreatingStep::Name(input))
                     }
-                    Mode::Browsing
-                }
-                KeyCode::Esc => Mode::Browsing,
-                _ => Mode::Creating(input),
+                    KeyCode::Backspace => {
+                        input.pop();
+                        Mode::Creating(CreatingStep::Name(input))
+                    }
+                    KeyCode::Enter => {
+                        let name = input.trim().to_string();
+                        if name.is_empty() {
+                            Mode::Creating(CreatingStep::Name(input))
+                        } else {
+                            Mode::Creating(CreatingStep::Color { name, cursor: 0 })
+                        }
+                    }
+                    KeyCode::Esc => Mode::Browsing,
+                    _ => Mode::Creating(CreatingStep::Name(input)),
+                },
+
+                CreatingStep::Color { name, mut cursor } => match key.code {
+                    KeyCode::Char('j') | KeyCode::Down => {
+                        cursor = (cursor + 1).min(COLORS.len() - 1);
+                        Mode::Creating(CreatingStep::Color { name, cursor })
+                    }
+                    KeyCode::Char('k') | KeyCode::Up => {
+                        cursor = cursor.saturating_sub(1);
+                        Mode::Creating(CreatingStep::Color { name, cursor })
+                    }
+                    KeyCode::Enter => {
+                        let color_hex = COLORS[cursor].2.to_string();
+                        action = Some(Action::CreateSubject { name, color_hex });
+                        Mode::Browsing
+                    }
+                    KeyCode::Esc => Mode::Browsing,
+                    _ => Mode::Creating(CreatingStep::Color { name, cursor }),
+                },
             },
 
             Mode::Questions { mut questions, mut cursor, mut answer, subject_id } => {
@@ -305,11 +350,15 @@ impl Component for SubjectsComponent {
             return;
         }
 
-        let is_creating = matches!(self.mode, Mode::Creating(_));
+        let form_lines: u16 = match &self.mode {
+            Mode::Creating(CreatingStep::Color { .. }) => COLORS.len() as u16 + 1,
+            Mode::Creating(CreatingStep::Name(_)) => 1,
+            _ => 0,
+        };
 
         let [list_area, form_area, hint_area] = Layout::vertical([
             Constraint::Min(0),
-            Constraint::Length(if is_creating { 1 } else { 0 }),
+            Constraint::Length(form_lines),
             Constraint::Length(1),
         ])
         .areas(inner);
@@ -320,22 +369,47 @@ impl Component for SubjectsComponent {
             .highlight_symbol("> ");
         frame.render_stateful_widget(list, list_area, &mut self.list_state);
 
-        if let Mode::Creating(input) = &self.mode {
-            frame.render_widget(
-                Paragraph::new(format!("  Name: {input}█")),
-                form_area,
-            );
-            frame.render_widget(
-                Paragraph::new("Enter to create  ·  ESC to cancel").dim().right_aligned(),
-                hint_area,
-            );
-        } else {
-            frame.render_widget(
-                Paragraph::new("n new  ·  d delete  ·  l expand  ·  ? questions  ·  ESC back")
-                    .dim()
-                    .right_aligned(),
-                hint_area,
-            );
+        match &self.mode {
+            Mode::Creating(CreatingStep::Name(input)) => {
+                frame.render_widget(
+                    Paragraph::new(format!("  Name: {input}█")),
+                    form_area,
+                );
+                frame.render_widget(
+                    Paragraph::new("Enter to next  ·  ESC to cancel").dim().right_aligned(),
+                    hint_area,
+                );
+            }
+            Mode::Creating(CreatingStep::Color { cursor, .. }) => {
+                let color_lines: Vec<Line> = COLORS
+                    .iter()
+                    .enumerate()
+                    .map(|(i, (label, color, _hex))| {
+                        if i == *cursor {
+                            Line::from(format!("  > {label}"))
+                                .style(Style::new().fg(*color).bold())
+                        } else {
+                            Line::from(format!("    {label}"))
+                                .style(Style::new().fg(*color).dim())
+                        }
+                    })
+                    .collect();
+                frame.render_widget(Paragraph::new(color_lines), form_area);
+                frame.render_widget(
+                    Paragraph::new("j/k to select  ·  Enter to create  ·  ESC to cancel")
+                        .dim()
+                        .right_aligned(),
+                    hint_area,
+                );
+            }
+            _ => {
+                frame.render_widget(
+                    Paragraph::new("n new  ·  d delete  ·  l expand  ·  ? questions  ·  ESC back")
+                        .dim()
+                        .right_aligned(),
+                    hint_area,
+                );
+            }
         }
     }
 }

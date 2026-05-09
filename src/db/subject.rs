@@ -14,9 +14,10 @@ pub fn find_all_summary(conn: &Connection) -> Result<Vec<SubjectStats>, rusqlite
         "SELECT
             s.id,
             s.name,
+            COALESCE(s.color_hex, '#c0c0c0') AS color_hex,
             s.is_default,
-            COALESCE(SUM(sb.duration), 0) AS total_seconds,
-            MAX(sb.start_time)            AS last_session
+            COALESCE(SUM(sb.duration), 0)    AS total_seconds,
+            MAX(sb.start_time)               AS last_session
          FROM subjects s
          LEFT JOIN study_blocks sb ON sb.subject_id = s.id
          GROUP BY s.id
@@ -30,12 +31,12 @@ pub fn find_all_summary(conn: &Connection) -> Result<Vec<SubjectStats>, rusqlite
     Ok(rows)
 }
 
-pub fn create(conn: &Connection, name: &str) -> Result<(), rusqlite::Error> {
+pub fn create(conn: &Connection, name: &str, color_hex: &str) -> Result<(), rusqlite::Error> {
     let id = Uuid::new_v4().to_string();
     let now = now_secs();
     conn.execute(
-        "INSERT INTO subjects (id, name, is_default, created_at) VALUES (?1, ?2, 0, ?3)",
-        (&id, name, now),
+        "INSERT INTO subjects (id, name, is_default, color_hex, created_at) VALUES (?1, ?2, 0, ?3, ?4)",
+        (&id, name, color_hex, now),
     )?;
     Ok(())
 }

@@ -33,7 +33,7 @@ pub enum Action {
     DeleteTask(String),
     ToggleTask(String),
     // Subject mutations
-    CreateSubject(String),
+    CreateSubject { name: String, color_hex: String },
     DeleteSubject(String),
     // Q&A session-end flow
     ToggleQuestionResolved { id: String, block_id: String, resolved: bool },

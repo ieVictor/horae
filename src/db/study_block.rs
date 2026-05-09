@@ -1,30 +1,25 @@
 use rusqlite::Connection;
 use uuid::Uuid;
 
-use crate::domain::{DailyStudyTime, StudyBlock, StudyBlockId, StudyBlockWithSubject, SubjectId};
+use crate::domain::{
+    DailyStudyTime, StudyBlock, StudyBlockId, StudyBlockWithSubject, SubjectId,
+};
 
 use super::now_secs;
 
-// All queries select columns in the order expected by StudyBlock::try_from:
-// id, subject_id, start_time, end_time, duration, created_at
 
-pub fn find_all_with_subject(conn: &Connection) -> Result<Vec<StudyBlockWithSubject>, rusqlite::Error> {
+pub fn find_all_with_subject(
+    conn: &Connection,
+) -> Result<Vec<StudyBlockWithSubject>, rusqlite::Error> {
     let mut stmt = conn.prepare(
-        "SELECT b.id, b.subject_id, b.start_time, b.end_time, b.duration, b.created_at, s.name
-         FROM study_blocks b
-         LEFT JOIN subjects s ON b.subject_id = s.id
-         ORDER BY b.start_time DESC",
+        "SELECT *, 0 AS total_seconds, NULL AS last_session
+         FROM study_blocks
+         LEFT JOIN subjects ON study_blocks.subject_id = subjects.id
+         ORDER BY start_time DESC",
     )?;
 
     let blocks = stmt
-        .query_map([], |row| {
-            let block = StudyBlock::try_from(row)?;
-            let subject_name: Option<String> = row.get(6)?;
-            Ok(StudyBlockWithSubject {
-                block,
-                subject_name,
-            })
-        })?
+        .query_map([], |row| StudyBlockWithSubject::try_from(row))?
         .collect::<Result<Vec<StudyBlockWithSubject>, _>>()?;
 
     Ok(blocks)
@@ -44,7 +39,7 @@ pub fn weekly_stats(conn: &Connection) -> Result<Vec<DailyStudyTime>, rusqlite::
          FROM days d
          LEFT JOIN study_blocks b ON date(b.start_time, 'unixepoch', 'localtime') = d.day
          GROUP BY d.day
-         ORDER BY d.day ASC"
+         ORDER BY d.day ASC",
     )?;
 
     let stats = stmt

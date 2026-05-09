@@ -290,8 +290,8 @@ impl App {
                         self.refresh_tasks()?;
                     }
 
-                    Some(Action::CreateSubject(name)) => {
-                        crate::db::subject::create(&self.conn, &name)?;
+                    Some(Action::CreateSubject { name, color_hex }) => {
+                        crate::db::subject::create(&self.conn, &name, &color_hex)?;
                         self.refresh_subjects()?;
                     }
                     Some(Action::DeleteSubject(id)) => {
