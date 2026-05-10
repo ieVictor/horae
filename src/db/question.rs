@@ -5,17 +5,12 @@ use crate::domain::Question;
 
 use super::now_secs;
 
-const COLS: &str =
-    "id, subject_id, text, answer, status, \
-     created_in_block_id, resolved_in_block_id, \
-     created_at, resolved_at, updated_at";
-
 pub fn find_open_for_subject(
     conn: &Connection,
     subject_id: &str,
 ) -> Result<Vec<Question>, rusqlite::Error> {
     let mut stmt = conn.prepare(&format!(
-        "SELECT {COLS} FROM questions
+        "SELECT * FROM questions
          WHERE subject_id = ?1 AND status = 'Open'
          ORDER BY created_at DESC"
     ))?;
@@ -28,7 +23,7 @@ pub fn find_all_for_subject(
     subject_id: &str,
 ) -> Result<Vec<Question>, rusqlite::Error> {
     let mut stmt = conn.prepare(&format!(
-        "SELECT {COLS} FROM questions
+        "SELECT * FROM questions
          WHERE subject_id = ?1
          ORDER BY created_at DESC"
     ))?;

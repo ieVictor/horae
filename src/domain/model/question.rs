@@ -25,7 +25,9 @@ impl FromSql for QuestionStatus {
         match value.as_str()? {
             "Open" => Ok(QuestionStatus::Open),
             "Resolved" => Ok(QuestionStatus::Resolved),
-            other => Err(FromSqlError::Other(format!("unknown status: {other}").into())),
+            other => Err(FromSqlError::Other(
+                format!("unknown status: {other}").into(),
+            )),
         }
     }
 }
@@ -47,21 +49,22 @@ pub struct Question {
 impl TryFrom<&Row<'_>> for Question {
     type Error = rusqlite::Error;
 
-    // Expects columns: id(0), subject_id(1), text(2), answer(3), status(4),
-    //                  created_in_block_id(5), resolved_in_block_id(6),
-    //                  created_at(7), resolved_at(8), updated_at(9)
     fn try_from(row: &Row) -> Result<Self, Self::Error> {
         Ok(Question {
-            id: row.get(0)?,
-            subject_id: row.get(1)?,
-            text: row.get(2)?,
-            answer: row.get::<_, Option<String>>(3)?,
-            status: row.get(4)?,
-            created_in_block_id: row.get::<_, Option<String>>(5)?.map(StudyBlockId),
-            resolved_in_block_id: row.get::<_, Option<String>>(6)?.map(StudyBlockId),
-            created_at: row.get(7)?,
-            resolved_at: row.get::<_, Option<i64>>(8)?,
-            updated_at: row.get::<_, Option<i64>>(9)?,
+            id: row.get("id")?,
+            subject_id: row.get("subject_id")?,
+            text: row.get("text")?,
+            answer: row.get::<_, Option<String>>("answer")?,
+            status: row.get("status")?,
+            created_in_block_id: row
+                .get::<_, Option<String>>("created_in_block_id")?
+                .map(StudyBlockId),
+            resolved_in_block_id: row
+                .get::<_, Option<String>>("resolved_in_block_id")?
+                .map(StudyBlockId),
+            created_at: row.get("created_at")?,
+            resolved_at: row.get::<_, Option<i64>>("resolved_at")?,
+            updated_at: row.get::<_, Option<i64>>("updated_at")?,
         })
     }
 }
