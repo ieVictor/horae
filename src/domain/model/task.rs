@@ -72,13 +72,13 @@ impl TryFrom<&Row<'_>> for Task {
 
     fn try_from(row: &Row) -> Result<Self, Self::Error> {
         Ok(Task {
-            id: row.get(0)?,
-            title: row.get(1)?,
-            description: row.get::<_, Option<String>>(2)?,
-            status: row.get(3)?,
-            priority: row.get(4)?,
-            created_at: row.get(5)?,
-            updated_at: row.get::<_, Option<i64>>(6)?,
+            id: row.get("id")?,
+            title: row.get("title")?,
+            description: row.get::<_, Option<String>>("description")?,
+            status: row.get("status")?,
+            priority: row.get("priority")?,
+            created_at: row.get("created_at")?,
+            updated_at: row.get::<_, Option<i64>>("updated_at")?,
         })
     }
 }
