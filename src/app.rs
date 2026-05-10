@@ -14,7 +14,7 @@ use crate::components::{
     Action, AnalyticsComponent, Component, QuestionsComponent, SubjectsComponent, TasksComponent,
     TimerComponent,
 };
-use crate::domain::{Question, SubjectStats};
+use crate::domain::{Question, SubjectId, SubjectStats};
 
 // ── Subject selector shown alongside the timer when Space is pressed ────────
 
@@ -251,11 +251,33 @@ impl App {
 
                     Some(Action::OpenAnalytics) => {
                         let blocks = crate::db::study_block::find_all_with_subject(&self.conn)?;
-                        let stats = crate::db::study_block::weekly_stats(&self.conn)?;
-                        self.overlay =
-                            Some(Overlay::Analytics(AnalyticsComponent::new(blocks, stats)));
+                        let stats = crate::db::study_block::weekly_stats(&self.conn, None, 0)?;
+                        let subjects = crate::db::subject::find_all_summary(&self.conn)?;
+                        self.overlay = Some(Overlay::Analytics(AnalyticsComponent::new(
+                            blocks, stats, subjects,
+                        )));
                     }
                     Some(Action::CloseAnalytics) => self.overlay = None,
+                    Some(Action::FilterAnalyticsBySubject { subject_id, week_offset }) => {
+                        let stats = crate::db::study_block::weekly_stats(
+                            &self.conn,
+                            subject_id.as_deref(),
+                            week_offset,
+                        )?;
+                        if let Some(Overlay::Analytics(c)) = &mut self.overlay {
+                            c.update_stats(stats, subject_id.map(SubjectId), week_offset);
+                        }
+                    }
+                    Some(Action::NavigateAnalyticsWeek { offset, subject_id }) => {
+                        let stats = crate::db::study_block::weekly_stats(
+                            &self.conn,
+                            subject_id.as_deref(),
+                            offset,
+                        )?;
+                        if let Some(Overlay::Analytics(c)) = &mut self.overlay {
+                            c.update_stats(stats, subject_id.map(SubjectId), offset);
+                        }
+                    }
 
                     Some(Action::OpenTasks) => {
                         let tasks = crate::db::task::find_all(&self.conn)?;

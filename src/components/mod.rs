@@ -23,6 +23,8 @@ pub enum Action {
     // Navigation
     OpenAnalytics,
     CloseAnalytics,
+    FilterAnalyticsBySubject { subject_id: Option<String>, week_offset: i32 },
+    NavigateAnalyticsWeek { offset: i32, subject_id: Option<String> },
     OpenTasks,
     CloseTasks,
     OpenSubjects,

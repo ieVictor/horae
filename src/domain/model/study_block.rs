@@ -66,3 +66,14 @@ pub struct DailyStudyTime {
     pub day: String,
     pub duration_secs: i64,
 }
+
+impl TryFrom<&Row<'_>> for DailyStudyTime {
+    type Error = rusqlite::Error;
+
+    fn try_from(row: &Row) -> Result<Self, Self::Error> {
+        Ok(DailyStudyTime {
+            day: row.get("day")?,
+            duration_secs: row.get("duration_secs")?,
+        })
+    }
+}

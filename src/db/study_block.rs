@@ -25,30 +25,33 @@ pub fn find_all_with_subject(
     Ok(blocks)
 }
 
-pub fn weekly_stats(conn: &Connection) -> Result<Vec<DailyStudyTime>, rusqlite::Error> {
+pub fn weekly_stats(
+    conn: &Connection,
+    subject_id: Option<&str>,
+    week_offset: i32,
+) -> Result<Vec<DailyStudyTime>, rusqlite::Error> {
+    // Shift the week window: offset 0 = current week, -1 = last week, etc.
+    let base_days = -6 + week_offset * 7;
     let mut stmt = conn.prepare(
         "WITH RECURSIVE
           days(day, i) AS (
-            SELECT date('now', 'localtime', '-6 days', 'weekday 0'), 0
+            SELECT date('now', 'localtime', CAST(?2 AS TEXT) || ' days', 'weekday 0'), 0
             UNION ALL
             SELECT date(day, '+1 day'), i + 1 FROM days WHERE i < 6
           )
          SELECT
-          d.day,
-          COALESCE(SUM(b.duration), 0)
+          d.day                        AS day,
+          COALESCE(SUM(b.duration), 0) AS duration_secs
          FROM days d
-         LEFT JOIN study_blocks b ON date(b.start_time, 'unixepoch', 'localtime') = d.day
+         LEFT JOIN study_blocks b
+           ON  date(b.start_time, 'unixepoch', 'localtime') = d.day
+           AND (?1 IS NULL OR b.subject_id = ?1)
          GROUP BY d.day
          ORDER BY d.day ASC",
     )?;
 
     let stats = stmt
-        .query_map([], |row| {
-            Ok(DailyStudyTime {
-                day: row.get(0)?,
-                duration_secs: row.get(1)?,
-            })
-        })?
+        .query_map(rusqlite::params![subject_id, base_days], |row| DailyStudyTime::try_from(row))?
         .collect::<Result<Vec<DailyStudyTime>, _>>()?;
 
     Ok(stats)
