@@ -62,4 +62,5 @@ Requires Rust 1.88 or later.
 cargo run --release
 ```
 
+
 The SQLite database (`horae.db`) is created in the current working directory on first run.
