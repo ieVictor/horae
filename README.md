@@ -63,3 +63,4 @@ cargo run --release
 ```
 
 The SQLite database (`horae.db`) is created in the current working directory on first run.
+
