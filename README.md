@@ -63,3 +63,16 @@ cargo run --release
 ```
 
 The SQLite database (`horae.db`) is created in the current working directory on first run.
+
+## Dependencies
+
+| Crate | Version | Purpose |
+|-------|---------|---------|
+| `ratatui` | 0.30.0 | Terminal UI rendering |
+| `crossterm` | 0.29 | Cross-platform terminal handling |
+| `color-eyre` | 0.6 | Colored error reporting |
+| `rusqlite` | 0.39.0 | SQLite database access with bundled SQLite |
+| `chrono` | 0.4 | Date and time handling |
+| `serde` | 1 | Serialization and deserialization framework |
+| `uuid` | 1 | UUID generation for unique identifiers |
+| `tui-input` | * | Terminal input handling |
