@@ -54,6 +54,19 @@ A terminal study tracker built with Rust and Ratatui.
 | `Space` | Toggle task status (tasks only) |
 | `q` | Quit |
 
+## Dependencies
+
+| Dependency | Version | Purpose |
+|-----------|---------|---------|
+| **ratatui** | 0.30.0 | Terminal UI framework for building the interactive interface |
+| **crossterm** | 0.29 | Cross-platform terminal handling (input capture, cursor control) |
+| **color-eyre** | 0.6 | Enhanced error reporting with colorized output and panic hooks |
+| **rusqlite** | 0.39.0 | SQLite database access for persisting sessions and tasks |
+| **chrono** | 0.4 | Date and time utilities for session timestamps and analytics |
+| **serde** | 1.0 | Serialization framework for data structures |
+| **uuid** | 1.0 | Unique ID generation for subjects and tasks |
+| **tui-input** | Latest | Text input widget for creating subjects and tasks in the UI |
+
 ## Build and run
 
 Requires Rust 1.88 or later.
