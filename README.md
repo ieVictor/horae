@@ -1,5 +1,7 @@
 # Horae - Terminal study tracker
 
+**English** | [Русский](README-ru.md) | [中文](README-zh.md) | [Português (BR)](README-ptbr.md) | [Español](README-es.md)
+
 A terminal study tracker built with Rust and Ratatui.
 
 ![horae timer screen](assets/tracking-your-time.png)
