@@ -1,3 +1,5 @@
+**English** | [Português](README.pt-BR.md) | [Español](README.es.md)
+
 # Horae - Terminal study tracker
 
 A terminal study tracker built with Rust and Ratatui.
